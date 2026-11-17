@@ -228,13 +228,26 @@ export default function Stage01Capture({ onNext, toast }) {
         <div className="space-y-6">
           <div className="space-y-2.5">
             <h1 className="font-serif-sc text-2xl font-normal leading-relaxed text-mistwhite transition-all duration-500 sm:text-[28px]">
-              {current ? current.question : '正在准备第一个问题…'}
+              {current ? current.question : probe.error ? '暂时没能准备好问题' : '正在准备第一个问题…'}
             </h1>
             <p className="text-xs font-light leading-relaxed text-slatefrost/75 transition-all duration-500 sm:text-[13px]">
               {current
                 ? '想到多少说多少，说清楚就好。我们会顺着你的回答往下问。'
-                : '静观正在读你的情况，稍等一下。'}
+                : probe.error
+                  ? probe.error
+                  : '静观正在读你的情况，稍等一下。'}
             </p>
+            {/* 首问失败时给出重试入口：首次请求只在挂载时发一次，没有这一步用户只能刷新页面 */}
+            {!current && probe.error && (
+              <button
+                type="button"
+                onClick={() => probe.askNext()}
+                disabled={probe.busy}
+                className="mt-1 inline-flex items-center gap-2 rounded-full border border-[#f28c38]/40 bg-[#f28c38]/10 px-4 py-1.5 text-[11px] tracking-[0.12em] text-[#f28c38] transition-colors hover:bg-[#f28c38]/20 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              >
+                <span>↻ 重新准备</span>
+              </button>
+            )}
           </div>
 
           {/* 进度：已聊几轮 + 回退操作 */}

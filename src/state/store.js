@@ -341,6 +341,21 @@ export function reducer(state, action) {
       }
     }
 
+    // 生成下一个问题失败
+    // 必须把 loading 复位，否则界面会永远停在「正在准备第一个问题…」，
+    // 而首次进入时的请求只发一次（useStage01Probe 的挂载 effect），
+    // 失败后没有任何地方会再把它置回 false —— 用户看到的就是一直加载。
+    case 's1/probeFail':
+      return {
+        ...state,
+        stage01: {
+          ...state.stage01,
+          loading: false,
+          branchLoading: false,
+          error: action.payload || '问题生成失败',
+        },
+      }
+
     // 后台预取完成：把每个标签的「下一问」填进最后一轮的 chips
     // payload: { branches: [{ label, nextQuestion, nextChips }] }
     // 不依赖 roundId：probeSuccess 与 branchSuccess 之间 React 状态可能还没提交，

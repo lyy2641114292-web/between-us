@@ -252,6 +252,24 @@ export async function onRequest(context) {
 
   // 未配置口令：明确告诉用户去配置，而不是假装有保护
   if (!password) {
+    // 未配置检查放在 /assets 放行之后，静态资源不受影响
+    if (PUBLIC_PREFIXES.some((p) => path.startsWith(p))) return next()
+
+    // API 路径返回 JSON，避免调用方拿到 HTML 后解析失败、错误信息难以定位
+    if (path.startsWith('/api/')) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: 'not_configured',
+          message: '站点尚未设置 ACCESS_PASSWORD，请在 Cloudflare Pages 后台配置后重新部署',
+        }),
+        {
+          status: 503,
+          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+        },
+      )
+    }
+
     return new Response(loginPage({ configured: false }), {
       status: 503,
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },

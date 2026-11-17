@@ -1,0 +1,253 @@
+/* ============================================================
+   效果层（原型 6.html L83-330，原样迁移）
+   含：光标光晕 / 散落呼吸光点 / 静观浮标与观察舱 / 首页双轨道双星
+   ============================================================ */
+
+/* =====================================================================
+   1. 全局统一：鼠标跟随银白色探索光晕
+===================================================================== */
+.cursor-white-halo {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--halo-size);
+  height: var(--halo-size);
+  margin-left: calc(var(--halo-size) * -0.5);
+  margin-top: calc(var(--halo-size) * -0.5);
+  opacity: var(--halo-opacity);
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 5;
+  background: radial-gradient(
+    circle at center,
+    rgba(242, 246, 252, 0.13) 0%,
+    rgba(230, 238, 248, 0.065) 32%,
+    rgba(210, 224, 240, 0.02) 58%,
+    rgba(210, 224, 240, 0) 76%
+  );
+  filter: blur(18px);
+  will-change: transform;
+}
+
+/* =====================================================================
+   2. 全局统一：底部散落呼吸珊瑚橙光点导航
+===================================================================== */
+@keyframes nodeTwinkle {
+  0%, 100% {
+    opacity: 0.34;
+    transform: scale(0.88);
+    box-shadow: 0 0 8px 1px rgba(242, 140, 56, 0.24);
+  }
+  50% {
+    opacity: 0.96;
+    transform: scale(1.18);
+    box-shadow:
+      0 0 18px 5px rgba(242, 140, 56, 0.75),
+      0 0 38px 12px rgba(242, 140, 56, 0.28);
+  }
+}
+
+@keyframes nodeDriftA {
+  0%, 100% { transform: translate(0px, 0px); }
+  50% { transform: translate(5px, -7px); }
+}
+
+@keyframes nodeDriftB {
+  0%, 100% { transform: translate(0px, 0px); }
+  50% { transform: translate(-6px, 5px); }
+}
+
+.scatter-drift-a { animation: nodeDriftA 11s ease-in-out infinite; }
+.scatter-drift-b { animation: nodeDriftB 13s ease-in-out infinite; }
+
+.scatter-dot {
+  animation: nodeTwinkle var(--twinkle-dur, 5.2s) ease-in-out infinite;
+  animation-delay: var(--twinkle-delay, 0s);
+  transition: all 0.45s var(--ease-healing);
+}
+
+.scatter-node.is-active .scatter-dot {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: scale(1.38) !important;
+  background-color: #f28c38;
+  box-shadow:
+    0 0 14px 4px rgba(242, 140, 56, 0.95),
+    0 0 36px 12px rgba(242, 140, 56, 0.55),
+    0 0 64px 20px rgba(242, 140, 56, 0.25) !important;
+}
+
+.scatter-node:hover .scatter-dot {
+  opacity: 1;
+  transform: scale(1.3);
+  box-shadow:
+    0 0 18px 5px rgba(242, 140, 56, 0.9),
+    0 0 42px 14px rgba(242, 140, 56, 0.4);
+}
+
+/* =====================================================================
+   3. 全局统一：可自由拖动的「静观」悬浮光点与观察舱
+===================================================================== */
+@keyframes corePulse {
+  0%, 100% {
+    box-shadow: 0 0 12px 2px rgba(242, 140, 56, 0.65), 0 0 28px 8px rgba(242, 140, 56, 0.22);
+    transform: scale(0.95);
+  }
+  50% {
+    box-shadow: 0 0 18px 5px rgba(242, 140, 56, 0.92), 0 0 42px 14px rgba(242, 140, 56, 0.4);
+    transform: scale(1.08);
+  }
+}
+.coral-pulse { animation: corePulse 4.4s ease-in-out infinite; }
+
+@keyframes beaconRipple {
+  0% { transform: scale(0.85); opacity: 0.75; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.beacon-ring-1 { animation: beaconRipple 3.6s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+.beacon-ring-2 { animation: beaconRipple 3.6s cubic-bezier(0.16, 1, 0.3, 1) 1.8s infinite; }
+
+.stillpoint-orb {
+  background: linear-gradient(145deg, rgba(16, 26, 46, 0.84) 0%, rgba(7, 13, 26, 0.88) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(242, 140, 56, 0.38);
+  box-shadow:
+    0 14px 36px -8px rgba(0, 0, 0, 0.78),
+    0 0 24px -6px rgba(242, 140, 56, 0.28),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+  touch-action: none;
+  user-select: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.stillpoint-orb:hover {
+  border-color: rgba(242, 140, 56, 0.75);
+  box-shadow: 0 16px 40px -6px rgba(0, 0, 0, 0.85), 0 0 32px -4px rgba(242, 140, 56, 0.45);
+}
+.stillpoint-orb.dragging {
+  cursor: grabbing;
+  transform: scale(1.04);
+  border-color: rgba(242, 140, 56, 0.9);
+}
+
+.stillpoint-drawer {
+  background: linear-gradient(170deg, rgba(14, 24, 44, 0.92) 0%, rgba(7, 13, 26, 0.96) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-left: 1px solid rgba(251, 191, 36, 0.18);
+  box-shadow: -24px 0 64px rgba(2, 6, 15, 0.88), inset 1px 0 0 rgba(255, 255, 255, 0.08);
+  transform: translateX(105%);
+  transition: transform 0.55s var(--ease-healing);
+}
+.stillpoint-drawer.open { transform: translateX(0); }
+
+/* =====================================================================
+   4. 首页视界专属样式（加粗双轨道、独立光晕与光斑高亮）
+===================================================================== */
+@keyframes fadeRise {
+  0% { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeScale {
+  0% { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.reveal-layer-1 { opacity: 0; animation: fadeScale 1.6s var(--ease-healing) 0.1s forwards; }
+.reveal-layer-2 { opacity: 0; animation: fadeRise 1.3s var(--ease-healing) 0.35s forwards; }
+.reveal-layer-3 { opacity: 0; animation: fadeRise 1.3s var(--ease-healing) 0.6s forwards; }
+.reveal-layer-4 { opacity: 0; animation: fadeRise 1.3s var(--ease-healing) 0.85s forwards; }
+
+.orbit-stage {
+  perspective: 1400px;
+  transform-style: preserve-3d;
+  transform: translateY(var(--orbit-offset-y));
+}
+@keyframes orbitRotateCW {
+  0% { transform: rotateX(16deg) rotateY(-10deg) rotateZ(0deg); }
+  100% { transform: rotateX(16deg) rotateY(-10deg) rotateZ(360deg); }
+}
+@keyframes orbitRotateCCW {
+  0% { transform: rotateX(-14deg) rotateY(12deg) rotateZ(360deg); }
+  100% { transform: rotateX(-14deg) rotateY(12deg) rotateZ(0deg); }
+}
+@keyframes orbitGlowPulseWarm {
+  0%, 100% {
+    box-shadow:
+      0 0 28px rgba(242, 140, 56, 0.16),
+      inset 0 0 24px rgba(242, 140, 56, 0.10);
+  }
+  50% {
+    box-shadow:
+      0 0 46px rgba(242, 140, 56, 0.28),
+      inset 0 0 36px rgba(242, 140, 56, 0.18);
+  }
+}
+@keyframes orbitGlowPulseCool {
+  0%, 100% {
+    box-shadow:
+      0 0 28px rgba(93, 169, 233, 0.16),
+      inset 0 0 24px rgba(93, 169, 233, 0.10);
+  }
+  50% {
+    box-shadow:
+      0 0 46px rgba(93, 169, 233, 0.28),
+      inset 0 0 36px rgba(93, 169, 233, 0.18);
+  }
+}
+
+/* 保持原直径不变，轮廓线条加粗至 2.25px，区别于背景细微等高线 */
+.orbit-ring-left {
+  border-width: 2.25px;
+  border-style: solid;
+  border-color: rgba(242, 140, 56, 0.56);
+  animation: orbitRotateCW 110s linear infinite, orbitGlowPulseWarm 7s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+.orbit-ring-right {
+  border-width: 2.25px;
+  border-style: solid;
+  border-color: rgba(93, 169, 233, 0.56);
+  animation: orbitRotateCCW 135s linear infinite, orbitGlowPulseCool 8s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.paper-lens {
+  width: var(--lens-size);
+  height: var(--lens-size);
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(230, 236, 242, 0.08) 0%,
+    rgba(74, 107, 130, 0.05) 55%,
+    rgba(42, 43, 66, 0.14) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    inset 0 0 28px rgba(230, 236, 242, 0.06),
+    inset 0 0 1px rgba(255, 255, 255, 0.25),
+    0 24px 60px rgba(2, 5, 12, 0.65);
+  transition: border-color 0.6s ease, box-shadow 0.6s ease;
+}
+.paper-lens:hover { border-color: rgba(242, 140, 56, 0.45); }
+
+.cta-explore {
+  transition: transform 0.35s var(--ease-healing), border-color 0.4s ease, background-color 0.4s ease, box-shadow 0.45s ease;
+}
+.cta-explore:hover {
+  transform: translateY(-2px);
+  border-color: rgba(242, 140, 56, 0.72);
+  background-color: rgba(242, 140, 56, 0.12);
+  box-shadow: 0 10px 32px -6px rgba(242, 140, 56, 0.28), inset 0 0 18px rgba(242, 140, 56, 0.14);
+}
+
+#home-portal {
+  opacity: 1;
+  transition: opacity 0.65s var(--ease-healing), visibility 0.65s ease, transform 0.65s var(--ease-healing);
+  user-select: none;
+}
+#home-portal.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scale(1.025);
+}

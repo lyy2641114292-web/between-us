@@ -1,0 +1,27 @@
+/* 字体自托管：与原型 Google Fonts 请求的 14 个字重一一对应
+   Cormorant Garamond 400/500/600 + 400italic
+   Inter 200/300/400/500
+   Noto Serif SC 300/400/500
+   Noto Sans SC 300/400/500 */
+
+/* Cormorant Garamond */
+@import '@fontsource/cormorant-garamond/400.css';
+@import '@fontsource/cormorant-garamond/400-italic.css';
+@import '@fontsource/cormorant-garamond/500.css';
+@import '@fontsource/cormorant-garamond/600.css';
+
+/* Inter */
+@import '@fontsource/inter/200.css';
+@import '@fontsource/inter/300.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+
+/* Noto Serif SC */
+@import '@fontsource/noto-serif-sc/300.css';
+@import '@fontsource/noto-serif-sc/400.css';
+@import '@fontsource/noto-serif-sc/500.css';
+
+/* Noto Sans SC */
+@import '@fontsource/noto-sans-sc/300.css';
+@import '@fontsource/noto-sans-sc/400.css';
+@import '@fontsource/noto-sans-sc/500.css';

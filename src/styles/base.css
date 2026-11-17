@@ -1,0 +1,32 @@
+/* ============================================================
+   基础层（原型 6.html L55-81，原样迁移）
+   ============================================================ */
+@import './tokens.css';
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background-color: var(--bg-abyss);
+  color: var(--text-mist);
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+  letter-spacing: 0.022em;
+  line-height: 1.72;
+}
+
+.font-serif-sc {
+  font-family: 'Noto Serif SC', Georgia, serif;
+  letter-spacing: 0.04em;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: rgba(5, 9, 17, 0.25); }
+::-webkit-scrollbar-thumb { background: rgba(139, 166, 188, 0.22); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(242, 140, 56, 0.45); }

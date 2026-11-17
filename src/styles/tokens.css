@@ -1,0 +1,15 @@
+/* ============================================================
+   设计令牌：与原型 6.html 的 :root 逐项一致，不新增、不改值
+   ============================================================ */
+:root {
+  --bg-abyss: #050911;
+  --accent-coral: #FF6B4A;
+  --accent-warm: #f28c38;
+  --accent-other: #5da9e9;
+  --text-mist: #E6ECF2;
+  --orbit-offset-y: -10vh;
+  --lens-size: 154px;
+  --halo-size: 450px;
+  --halo-opacity: 1;
+  --ease-healing: cubic-bezier(0.22, 1, 0.36, 1);
+}

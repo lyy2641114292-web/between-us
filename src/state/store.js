@@ -284,6 +284,21 @@ export const INITIAL_STATE = {
   },
 }
 
+// 阶段 05 取草稿：优先用该方向「当前正在用的文字」（含用户手改），
+// 其次用该方向的 AI 原始版本，最后回落到该方向的兜底文案
+//
+// 必须放在模块顶层：它原先被写在 reducer 函数体内部（switch 的 case 之间），
+// 虽然语法上合法，但压缩后会被提升成模块级引用而丢失局部绑定，
+// 线上表现为点击意愿卡片时报 `ReferenceError: _ is not defined`、整页黑屏。
+function draftFor(stage05, intent, tone) {
+  const t = tone || stage05.tone
+  const current = stage05.draftsByIntent?.[intent]?.[t]
+  if (typeof current === 'string' && current.trim()) return current
+  const ai = stage05.aiDraftsByIntent?.[intent]?.[t]
+  if (typeof ai === 'string' && ai.trim()) return ai
+  return s5TemplateDraft(intent, t)
+}
+
 export function reducer(state, action) {
   switch (action.type) {
     // ---- 阶段 01 ----
@@ -1089,18 +1104,7 @@ export function reducer(state, action) {
     case 's4/aiFail':
       return { ...state, stage04: { ...state.stage04, aiStatus: 'template', aiError: action.payload || 'AI 暂时不可用' } }
 
-    // 阶段 05 取草稿：优先用该方向「当前正在用的文字」（含用户手改），
-// 其次用该方向的 AI 原始版本，最后回落到该方向的兜底文案
-function draftFor(stage05, intent, tone) {
-  const t = tone || stage05.tone
-  const current = stage05.draftsByIntent?.[intent]?.[t]
-  if (typeof current === 'string' && current.trim()) return current
-  const ai = stage05.aiDraftsByIntent?.[intent]?.[t]
-  if (typeof ai === 'string' && ai.trim()) return ai
-  return s5TemplateDraft(intent, t)
-}
-
-// ---- 阶段 05 ----
+    // ---- 阶段 05 ----
     case 's5/selectIntent': {
       const intent = action.payload
       const isDraftType = intent === 'express' || intent === 'explain'

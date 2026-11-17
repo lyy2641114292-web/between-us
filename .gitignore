@@ -22,3 +22,6 @@ npm-debug.log*
 # 临时文件
 .shots/
 *.tmp
+
+# 临时诊断脚本
+__*.mjs

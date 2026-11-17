@@ -7,19 +7,15 @@ import { createServer } from 'node:http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 
-import { config, describeKeyStatus, ROOT } from './config.mjs'
-import { AIError, chatJSON, chatStream } from './deepseek.mjs'
+import { config, describeKeyStatus, ROOT } from './config.node.mjs'
+import { AIError } from './deepseek.mjs'
 import {
-  buildAnalyzePrompt,
-  buildComparePrompt,
-  buildDraftPrompt,
-  buildExploreBranchPrompt,
-  buildExplorePrompt,
-  buildProbeBranchPrompt,
-  buildProbePrompt,
-  buildStillpointPrompt,
-  buildSummarizePrompt,
-} from './prompts.mjs'
+  errorPayload,
+  parseBody,
+  runGenerate,
+  runStillpointOpening,
+  runStillpointStream,
+} from './handlers.js'
 
 // ------------------------------------------------------------
 // 简单限流：每个 IP 每分钟最多 N 次，防止密钥被盗刷
@@ -95,58 +91,32 @@ function readBody(req) {
     })
     req.on('end', () => {
       try {
-        resolve(data ? JSON.parse(data) : {})
-      } catch {
-        reject(new AIError('bad_request', '请求体不是合法 JSON'))
+        // 统一走共享层的解析逻辑，保证与 Workers 侧行为一致
+        resolve(parseBody(data, LIMIT))
+      } catch (err) {
+        reject(err)
       }
     })
     req.on('error', reject)
   })
 }
 
-function errorPayload(err) {
-  const code = err instanceof AIError ? err.code : 'unknown'
-  const message = err?.message || '服务异常'
-  // 不透传上游原始响应，避免泄漏细节
-  return { ok: false, code, message }
-}
 
 // ------------------------------------------------------------
 // 任务分发
+// 业务实现已抽到 server/handlers.js，与 Cloudflare Pages Functions 共用
 // ------------------------------------------------------------
-const PROMPT_BUILDERS = {
-  analyze: buildAnalyzePrompt,
-  explore: buildExplorePrompt,
-  exploreBranch: buildExploreBranchPrompt,
-  compare: buildComparePrompt,
-  draft: buildDraftPrompt,
-  probe: buildProbePrompt,
-  probeBranch: buildProbeBranchPrompt,
-  summarize: buildSummarizePrompt,
-}
-
-const MAX_TOKENS = {
-  analyze: 2200,
-  explore: 3000,
-  exploreBranch: 4000,
-  compare: 2400,
-  draft: 2600,
-  probe: 600,
-  probeBranch: 1200,
-  summarize: 700,
-}
-
-// 每个任务的采样温度：需要发散的高一点，需要稳定的低一点
-const TEMPERATURE = {
-  analyze: 0.6,
-  explore: 0.8,
-  exploreBranch: 0.85,
-  compare: 0.7,
-  draft: 0.8,
-  probe: 0.85,
-  probeBranch: 0.85,
-  summarize: 0.4,
-}
+// 已知任务名清单（用于在校验阶段就挡掉无效请求，避免占用限流额度）
+const PROMPT_TASKS = new Set([
+  'analyze',
+  'explore',
+  'exploreBranch',
+  'compare',
+  'draft',
+  'probe',
+  'probeBranch',
+  'summarize',
+])
 
 async function handleGenerate(req, res, ip) {
   let body
@@ -157,8 +127,7 @@ async function handleGenerate(req, res, ip) {
   }
 
   const { task, context = {} } = body
-  const builder = PROMPT_BUILDERS[task]
-  if (!builder) {
+  if (!PROMPT_TASKS.has(task)) {
     // 无效任务不占限流额度，也不调用模型
     return sendJSON(res, 400, { ok: false, code: 'bad_request', message: `未知任务：${task}` })
   }
@@ -169,21 +138,8 @@ async function handleGenerate(req, res, ip) {
   }
   recordHit(ip)
 
-  try {
-    const { system, user } = builder(context)
-    const result = await chatJSON({
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      maxTokens: MAX_TOKENS[task] || 2000,
-      temperature: TEMPERATURE[task] ?? 0.7,
-    })
-    return sendJSON(res, 200, { ok: true, task, data: result })
-  } catch (err) {
-    console.error(`[generate:${task}]`, err.code || '', err.message)
-    return sendJSON(res, 200, errorPayload(err)) // 200 + ok:false，让前端走降级
-  }
+  const { status, json } = await runGenerate({ config, body: { task, context } })
+  return sendJSON(res, status, json)
 }
 
 async function handleStillpointOpening(req, res, ip) {
@@ -199,45 +155,8 @@ async function handleStillpointOpening(req, res, ip) {
   }
   recordHit(ip)
 
-  const { context = {} } = body
-
-  try {
-    // 由前端明确指定 mode：opening（开场+追问）或 questions（只出追问）
-    const mode = context.mode === 'questions' ? 'questions' : 'opening'
-    const { system, user } = buildStillpointPrompt({ ...context, mode, userText: '' })
-    const data = await chatJSON({
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      maxTokens: 900,
-      temperature: 0.85,
-    })
-
-    const opening = Array.isArray(data.opening)
-      ? data.opening.filter((p) => typeof p === 'string' && p.trim())
-      : []
-    const questions = Array.isArray(data.questions)
-      ? data.questions.filter((q) => typeof q === 'string' && q.trim()).slice(0, 3)
-      : []
-
-    if (mode === 'questions') {
-      // 只出追问：空数组也算失败，让前端回落到通用池
-      if (questions.length === 0) {
-        return sendJSON(res, 200, { ok: false, code: 'bad_response', message: '追问生成失败' })
-      }
-      return sendJSON(res, 200, { ok: true, data: { opening: [], questions } })
-    }
-
-    if (opening.length === 0) {
-      return sendJSON(res, 200, { ok: false, code: 'bad_response', message: '开场白生成失败' })
-    }
-
-    return sendJSON(res, 200, { ok: true, data: { opening, questions } })
-  } catch (err) {
-    console.error('[stillpoint-opening]', err.code || '', err.message)
-    return sendJSON(res, 200, errorPayload(err))
-  }
+  const { status, json } = await runStillpointOpening({ config, body })
+  return sendJSON(res, status, json)
 }
 
 async function handleStillpoint(req, res, ip) {
@@ -253,8 +172,6 @@ async function handleStillpoint(req, res, ip) {
   }
   recordHit(ip)
 
-  const { context = {} } = body
-
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -262,28 +179,10 @@ async function handleStillpoint(req, res, ip) {
     'X-Accel-Buffering': 'no',
   })
 
-  const sendEvent = (obj) => {
-    res.write(`data: ${JSON.stringify(obj)}\n\n`)
-  }
-
   try {
-    const { system, user } = buildStillpointPrompt(context)
-    let full = ''
-    for await (const delta of chatStream({
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      maxTokens: 800,
-      temperature: 0.85,
-    })) {
-      full += delta
-      sendEvent({ type: 'delta', text: delta })
+    for await (const chunk of runStillpointStream({ config, body })) {
+      res.write(chunk)
     }
-    sendEvent({ type: 'done', text: full })
-  } catch (err) {
-    console.error('[stillpoint]', err.code || '', err.message)
-    sendEvent({ type: 'error', ...errorPayload(err) })
   } finally {
     res.end()
   }

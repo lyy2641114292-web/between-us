@@ -2,14 +2,17 @@
 // DeepSeek 客户端
 // - 结构化输出（JSON）与流式（SSE）两种模式
 // - 统一错误分类，便于前端给出人话提示
+//
+// 2026-11-17 改造：配置改为显式传入（config 参数）。
+// 原因：Workers 的环境变量挂在每次请求的 env 上，不是模块级全局，
+// 模块加载时读不到。Node 侧调用方传 config.node.mjs 的 config 即可。
 // ============================================================
-import { config, hasApiKey } from './config.mjs'
 
 export class AIError extends Error {
   constructor(code, message, detail) {
     super(message)
     this.name = 'AIError'
-    this.code = code // no_key | unauthorized | rate_limit | timeout | bad_response | network | server
+    this.code = code // no_key | unauthorized | rate_limit | timeout | bad_response | network | server | bad_request
     this.detail = detail
   }
 }
@@ -27,9 +30,9 @@ function classifyHttp(status, bodyText) {
   return new AIError('bad_response', `AI 返回异常（HTTP ${status}）`, bodyText)
 }
 
-async function request(body, { stream = false } = {}) {
-  if (!hasApiKey()) {
-    throw new AIError('no_key', '未配置 API 密钥，请在 .env 中填写 DEEPSEEK_API_KEY')
+async function request(config, body, { stream = false } = {}) {
+  if (!config.apiKey) {
+    throw new AIError('no_key', '未配置 API 密钥，请在 .env 或环境变量中填写 DEEPSEEK_API_KEY')
   }
 
   const controller = new AbortController()
@@ -68,12 +71,13 @@ async function request(body, { stream = false } = {}) {
 /**
  * 非流式调用，要求返回 JSON 对象
  * @param {object} params
- * @param {Array} params.messages
+ * @param {object} params.config  来自 buildConfig 的配置
+ * @param {Array}  params.messages
  * @param {number} [params.maxTokens]
  * @param {number} [params.temperature]
  * @param {number} [params.retries] 解析失败时的重试次数
  */
-export async function chatJSON({ messages, maxTokens = 2000, temperature = 0.7, retries = 2 }) {
+export async function chatJSON({ config, messages, maxTokens = 2000, temperature = 0.7, retries = 2 }) {
   let lastErr = null
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -89,7 +93,7 @@ export async function chatJSON({ messages, maxTokens = 2000, temperature = 0.7, 
       temperature,
       stream: false,
     }
-    // 部分第三方代理不支持 response_format，可通过 .env 关闭
+    // 部分第三方代理不支持 response_format，可通过环境变量关闭
     if (config.jsonMode) {
       payload.response_format = { type: 'json_object' }
     }
@@ -101,7 +105,7 @@ export async function chatJSON({ messages, maxTokens = 2000, temperature = 0.7, 
     let res
     let timer
     try {
-      const out = await request(payload)
+      const out = await request(config, payload)
       res = out.res
       timer = out.timer
     } catch (err) {
@@ -151,8 +155,11 @@ export async function chatJSON({ messages, maxTokens = 2000, temperature = 0.7, 
 /**
  * 流式调用：返回一个 async generator，逐段产出文本增量
  * 调用方负责写入 SSE 响应
+ * @param {object} params
+ * @param {object} params.config
+ * @param {Array}  params.messages
  */
-export async function* chatStream({ messages, maxTokens = 1200, temperature = 0.8 }) {
+export async function* chatStream({ config, messages, maxTokens = 1200, temperature = 0.8 }) {
   const payload = {
     model: config.model,
     messages,
@@ -164,7 +171,7 @@ export async function* chatStream({ messages, maxTokens = 1200, temperature = 0.
     payload.thinking = { type: 'disabled' }
   }
 
-  const { res, timer } = await request(payload, { stream: true })
+  const { res, timer } = await request(config, payload, { stream: true })
 
   const reader = res.body.getReader()
   const decoder = new TextDecoder('utf-8')
@@ -183,10 +190,10 @@ export async function* chatStream({ messages, maxTokens = 1200, temperature = 0.
       for (const line of lines) {
         const trimmed = line.trim()
         if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (payload === '[DONE]') return
+        const payloadText = trimmed.slice(5).trim()
+        if (payloadText === '[DONE]') return
         try {
-          const json = JSON.parse(payload)
+          const json = JSON.parse(payloadText)
           const delta = json?.choices?.[0]?.delta?.content
           if (delta) yield delta
         } catch {

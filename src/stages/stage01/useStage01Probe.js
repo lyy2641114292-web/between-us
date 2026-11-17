@@ -88,9 +88,15 @@ export function useStage01Probe(toast) {
   }, [])
 
   // 进入阶段时：没有问题就生成第一个
+  //
+  // 注意 !loading 守卫会带来一个死锁风险：如果 loading 是上次会话残留的 true
+  // （请求途中刷新/关页），这里会直接跳过，而 loading 又没有任何路径能自己变回 false，
+  // 界面就会永久停在「正在准备第一个问题…」。
+  // persist.js 已经会在读取存档时复位这些标记；这里再加一道：
+  // 挂载时若发现 qa 为空且「没有真实请求在飞」（inFlight 为 false），强制发起一次。
   useEffect(() => {
     const s1 = stateRef.current.stage01
-    if (s1.qa.length === 0 && !s1.loading) {
+    if (s1.qa.length === 0 && !inFlight.current) {
       askNext()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -74,6 +74,38 @@ function migrateStage05Drafts(stage05) {
   }
 }
 
+// 读取存档时把所有「进行中」标记复位为 false。
+//
+// 为什么必须做：
+//   这些字段表示「有一个请求正在飞」，是会话态，而不是用户数据。
+//   如果用户在请求途中刷新/关页/断网，loading 会以 true 被写进存档。
+//   下次打开时，各阶段的「首次请求」触发条件都带 !loading 守卫，
+//   于是永远不发请求；而 loading 又没有任何路径会自己变回 false，
+//   error 也是空的，界面就永久停在「正在准备…」，刷新也救不回来。
+//   （2026-11-17 线上复现：qa=0、loading=true、error=''、零请求）
+function resetTransientFlags(state) {
+  const s = state || {}
+  return {
+    ...s,
+    stage01: {
+      ...(s.stage01 || {}),
+      loading: false,
+      branchLoading: false,
+      summaryLoading: false,
+    },
+    stage02: { ...(s.stage02 || {}), aiStatus: resetAiStatus(s.stage02) },
+    stage03: { ...(s.stage03 || {}), aiStatus: resetAiStatus(s.stage03) },
+    stage04: { ...(s.stage04 || {}), aiStatus: resetAiStatus(s.stage04) },
+    stage05: { ...(s.stage05 || {}), aiStatus: resetAiStatus(s.stage05) },
+  }
+}
+
+// 只有 loading 需要复位；ai / template / idle 都是完成态，要原样保留，
+// 否则每次刷新都会白白重新请求一次模型。
+function resetAiStatus(stage) {
+  return stage?.aiStatus === 'loading' ? 'idle' : stage?.aiStatus
+}
+
 // 旧档（v1）的 fragments 是纯字符串数组，缺少 step 与 id。
 // 按顺序推断所属步骤（第 i 条属于第 i+1 题），保证老用户数据不丢。
 // 旧档（v1/v2）的 stage01 用 fragments（固定四步），
@@ -161,7 +193,10 @@ export function loadState() {
       // 静观对话不进存档（属于会话态，刷新后重新开场更符合预期）
       stillpoint: INITIAL_STATE.stillpoint,
     }
-    return { state: merged, restored: true }
+
+    // 最后一步：把所有「请求进行中」标记复位。
+    // 这些是会话态而非用户数据，残留会让界面永久卡在加载中。
+    return { state: resetTransientFlags(merged), restored: true }
   } catch {
     return { state: INITIAL_STATE, restored: false, corrupted: true }
   }
